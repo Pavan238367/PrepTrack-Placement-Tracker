@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PrepTrack — Placement Preparation Tracker for DSA questions, aptitude practice, and mock-test performance.">
+  <title>PrepTrack | Placement Preparation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Prep<span>Track</span></a>
+    <span class="top-note">Your placement journey, organized.</span>
+  </header>
+
+  <main class="container">
+    <section class="welcome">
+      <div>
+        <p class="eyebrow">PLACEMENT PREPARATION</p>
+        <h1>Small steps. <span>Big offers.</span></h1>
+        <p class="muted">Track DSA, aptitude practice, and mock tests in one place.</p>
+      </div>
+      <div class="today-pill" title="Daily streak calculated from your actual recorded practice dates">
+        <span class="dot"></span>
+        <span class="streak-text">🔥 <strong>{{ streak }}</strong> Day Streak</span>
+      </div>
+    </section>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-area">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <p>DSA Questions</p><strong>{{ total_dsa }}</strong>
+        <small>{{ completed_dsa }} completed</small>
+      </article>
+      <article class="stat-card">
+        <p>DSA Completion</p><strong>{{ completion }}%</strong>
+        <div class="progress"><span style="width: {{ completion }}%"></span></div>
+      </article>
+      <article class="stat-card">
+        <p>Aptitude Questions</p><strong>{{ aptitude_questions }}</strong>
+        <small>Total questions practiced</small>
+      </article>
+      <article class="stat-card">
+        <p>Average Mock Score</p><strong>{{ average_score }}%</strong>
+        <small>Across recorded tests</small>
+      </article>
+      <article class="stat-card">
+        <p>Daily Streak</p><strong>{{ streak }} <span class="stat-unit">days</span></strong>
+        <small>{{ 'Active today · Great job!' if practiced_today else ('Active from yesterday · Log today to keep it' if streak > 0 else 'Log practice today to start streak') }}</small>
+      </article>
+    </section>
+
+    <!-- Day 3: Weekly Momentum Progress Section (Calculated from Actual Records) -->
+    <section class="weekly-section" aria-label="Weekly Progress Overview">
+      <div class="weekly-card">
+        <div class="weekly-header">
+          <div>
+            <p class="eyebrow">WEEKLY MOMENTUM</p>
+            <h2>Last 7 Days Progress</h2>
+            <p class="muted">Rolling activity from {{ weekly_stats.start_date }} to {{ weekly_stats.end_date }}</p>
+          </div>
+          <div class="weekly-badge">
+            <span class="pulse-indicator"></span>
+            <strong>{{ weekly_stats.active_days }} / {{ weekly_stats.total_days }}</strong> Days Active
+          </div>
+        </div>
+
+        <!-- 7-Day Timeline Visual Chips -->
+        <div class="week-timeline" aria-label="7-day activity timeline">
+          {% for day in weekly_stats.days_breakdown %}
+            <div class="day-chip {{ 'active' if day.active else 'rest' }} {{ 'today' if day.is_today else '' }}" title="{{ day.date }}: {{ 'Practice logged' if day.active else 'No activity' }}{{ ' (Today)' if day.is_today else '' }}">
+              <span class="day-chip-name">{{ day.day_name }}</span>
+              <span class="day-chip-dot"></span>
+              <span class="day-chip-date">{{ day.date[8:] }}</span>
+            </div>
+          {% endfor %}
+        </div>
+
+        <!-- Weekly Metrics Grid -->
+        <div class="weekly-metrics-grid">
+          <div class="weekly-metric">
+            <span class="metric-icon">📅</span>
+            <div>
+              <small>Consistency</small>
+              <strong>{{ weekly_stats.active_days }} <span class="unit">of 7 days</span></strong>
+            </div>
+          </div>
+          <div class="weekly-metric">
+            <span class="metric-icon">💻</span>
+            <div>
+              <small>DSA Solved</small>
+              <strong>{{ weekly_stats.dsa_completed }} <span class="unit">completed</span></strong>
+            </div>
+          </div>
+          <div class="weekly-metric">
+            <span class="metric-icon">📚</span>
+            <div>
+              <small>Aptitude Practiced</small>
+              <strong>{{ weekly_stats.aptitude_questions }} <span class="unit">questions</span></strong>
+              <span class="sub-info">{{ weekly_stats.aptitude_minutes }} mins logged</span>
+            </div>
+          </div>
+          <div class="weekly-metric">
+            <span class="metric-icon">📝</span>
+            <div>
+              <small>Mock Tests</small>
+              <strong>{{ weekly_stats.mock_tests_taken }} <span class="unit">tests taken</span></strong>
+              <span class="sub-info">{{ weekly_stats.mock_avg_score }}% avg score</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Day 3: Visual Analytics Charts Section -->
+    <section class="charts-section" aria-label="Visual Analytics Charts">
+      <div class="section-title-wrap">
+        <div>
+          <p class="eyebrow">VISUAL INSIGHTS</p>
+          <h2>Preparation Analytics</h2>
+        </div>
+        <span class="charts-badge">Day 3 Visualizations</span>
+      </div>
+
+      <div class="charts-grid">
+        <!-- Chart 1: DSA Pending vs Completed Chart -->
+        <article class="chart-card" id="card-dsa-chart">
+          <div class="chart-card-header">
+            <div>
+              <p class="eyebrow">DSA COMPLETION</p>
+              <h3>Pending vs Completed</h3>
+            </div>
+            <span class="chart-stat-pill" id="dsa-rate-pill">{{ completion }}% done</span>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="dsaChart" aria-label="DSA Completion Donut Chart" role="img"></canvas>
+            <div id="dsa-empty-overlay" class="chart-empty-state" style="display: none;">
+              <span class="chart-empty-icon">📊</span>
+              <strong>No DSA questions yet</strong>
+              <p>Add questions in the form below to visualize your pending vs completed distribution.</p>
+            </div>
+          </div>
+          <div class="chart-footer-legend">
+            <div class="legend-badge legend-completed">
+              <span class="legend-dot"></span>
+              <span>Completed: <strong id="legend-dsa-completed">{{ completed_dsa }}</strong></span>
+            </div>
+            <div class="legend-badge legend-pending">
+              <span class="legend-dot"></span>
+              <span>Pending: <strong id="legend-dsa-pending">{{ pending_dsa }}</strong></span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Chart 2: Mock-Test Score Performance Trend Chart -->
+        <article class="chart-card" id="card-mock-chart">
+          <div class="chart-card-header">
+            <div>
+              <p class="eyebrow">MOCK-TEST TREND</p>
+              <h3>Score Performance</h3>
+            </div>
+            <span class="chart-stat-pill">{{ average_score }}% avg</span>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="mockChart" aria-label="Mock Test Performance Trend Chart" role="img"></canvas>
+            <div id="mock-empty-overlay" class="chart-empty-state" style="display: none;">
+              <span class="chart-empty-icon">📈</span>
+              <strong>No mock tests logged</strong>
+              <p>Record your test scores below to track performance trajectory across dates.</p>
+            </div>
+          </div>
+          <div class="chart-footer-legend">
+            <span class="chart-footnote">Tracks percentage scores by test date and assessment</span>
+          </div>
+        </article>
+
+        <!-- Chart 3: Aptitude Practice Volume Chart -->
+        <article class="chart-card" id="card-aptitude-chart">
+          <div class="chart-card-header">
+            <div>
+              <p class="eyebrow">APTITUDE VOLUME</p>
+              <h3>Questions by Date</h3>
+            </div>
+            <span class="chart-stat-pill">{{ aptitude_questions }} total</span>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="aptitudeChart" aria-label="Aptitude Practice Volume Chart" role="img"></canvas>
+            <div id="aptitude-empty-overlay" class="chart-empty-state" style="display: none;">
+              <span class="chart-empty-icon">🎯</span>
+              <strong>No aptitude practice logged</strong>
+              <p>Log practice sessions below to visualize daily question counts and time spent.</p>
+            </div>
+          </div>
+          <div class="chart-footer-legend">
+            <span class="chart-footnote">Displays questions solved per practice date with duration in minutes</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">PRACTICE</p><h2>Add DSA question</h2></div></div>
+        <form action="/add-dsa" method="POST" class="form-grid">
+          <label class="full">Question title
+            <input name="title" placeholder="e.g. Two Sum" required maxlength="120">
+          </label>
+          <label>Topic
+            <input name="topic" placeholder="e.g. Arrays" required maxlength="60">
+          </label>
+          <label>Difficulty
+            <select name="difficulty">
+              <option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option>
+            </select>
+          </label>
+          <button class="btn full" type="submit">+ Add question</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">DAILY PRACTICE</p><h2>Log aptitude session</h2></div></div>
+        <form action="/add-aptitude" method="POST" class="form-grid">
+          <label class="full">Topic
+            <input name="aptitude_topic" placeholder="e.g. Percentages" required maxlength="80">
+          </label>
+          <label>Questions solved
+            <input name="questions_solved" type="number" min="0" max="10000" required placeholder="20">
+          </label>
+          <label>Minutes spent
+            <input name="minutes_spent" type="number" min="0" max="1440" required placeholder="30">
+          </label>
+          <label class="full">Practice date
+            <input name="practice_date" type="date" required>
+          </label>
+          <button class="btn full" type="submit">Save practice</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">ASSESSMENT</p><h2>Record mock test</h2></div></div>
+        <form action="/add-mock" method="POST" class="form-grid">
+          <label class="full">Test name
+            <input name="test_name" placeholder="e.g. CoCubes Aptitude Mock 1" required maxlength="100">
+          </label>
+          <label>Score
+            <input name="score" type="number" min="0" max="10000" step="0.5" required placeholder="35">
+          </label>
+          <label>Total marks
+            <input name="total_marks" type="number" min="0.5" max="10000" step="0.5" required placeholder="50">
+          </label>
+          <label class="full">Test date
+            <input name="test_date" type="date" required>
+          </label>
+          <button class="btn full" type="submit">Save test score</button>
+        </form>
+      </article>
+
+      <article class="panel dsa-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">YOUR WORK</p><h2>DSA question list</h2></div>
+          <span class="count" id="dsa-count-badge">{{ questions|length }} showing</span>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="filter-toolbar">
+          <form action="/" method="GET" class="filter-form" id="dsa-filter-form">
+            <div class="filter-group search-group">
+              <label for="dsa-search-input">Search Title</label>
+              <div class="search-input-wrap">
+                <input 
+                  type="text" 
+                  id="dsa-search-input" 
+                  name="search" 
+                  placeholder="Search questions (e.g., Two Sum)..." 
+                  value="{{ search_query }}"
+                  autocomplete="off"
+                >
+              </div>
+            </div>
+
+            <div class="filter-group">
+              <label for="dsa-topic-select">Topic</label>
+              <select id="dsa-topic-select" name="topic">
+                <option value="">All Topics</option>
+                {% for t in distinct_topics %}
+                  <option value="{{ t }}" {% if selected_topic == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label for="dsa-difficulty-select">Difficulty</label>
+              <select id="dsa-difficulty-select" name="difficulty">
+                <option value="">All Difficulties</option>
+                <option value="Easy" {% if selected_difficulty == 'Easy' %}selected{% endif %}>Easy</option>
+                <option value="Medium" {% if selected_difficulty == 'Medium' %}selected{% endif %}>Medium</option>
+                <option value="Hard" {% if selected_difficulty == 'Hard' %}selected{% endif %}>Hard</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label for="dsa-status-select">Status</label>
+              <select id="dsa-status-select" name="status">
+                <option value="">All Statuses</option>
+                <option value="Pending" {% if selected_status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Completed" {% if selected_status == 'Completed' %}selected{% endif %}>Completed</option>
+              </select>
+            </div>
+
+            <div class="filter-actions">
+              <button type="submit" class="btn btn-filter" id="apply-filters-btn">Filter</button>
+              {% if search_query or selected_topic or selected_difficulty or selected_status %}
+                <a href="/" class="btn btn-secondary btn-clear" id="clear-filters-btn">Clear</a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+
+        {% if total_dsa == 0 %}
+          <div class="empty"><div class="empty-icon">✓</div><strong>No DSA questions yet</strong><p>Add your first question using the form above.</p></div>
+        {% elif questions %}
+          <div class="table-wrap">
+            <table id="dsa-table">
+              <thead><tr><th>Question</th><th>Topic</th><th>Level</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                {% for q in questions %}
+                <tr 
+                  data-id="{{ q.id }}" 
+                  data-title="{{ q.title|lower }}" 
+                  data-topic="{{ q.topic|lower }}" 
+                  data-difficulty="{{ q.difficulty }}" 
+                  data-status="{{ q.status }}"
+                >
+                  <td class="question-title">{{ q.title }}</td>
+                  <td>{{ q.topic }}</td>
+                  <td><span class="tag {{ q.difficulty|lower }}">{{ q.difficulty }}</span></td>
+                  <td><span class="status {{ 'done' if q.status == 'Completed' else 'pending' }}">{{ q.status }}</span></td>
+                  <td class="actions">
+                    <button 
+                      type="button" 
+                      class="text-btn edit-btn" 
+                      data-id="{{ q.id }}" 
+                      data-title="{{ q.title }}" 
+                      data-topic="{{ q.topic }}" 
+                      data-difficulty="{{ q.difficulty }}"
+                      onclick="openEditModal(this)">
+                      Edit
+                    </button>
+                    <form action="/toggle-dsa/{{ q.id }}" method="POST">
+                      <button class="text-btn" type="submit">{{ 'Undo' if q.status == 'Completed' else 'Complete' }}</button>
+                    </form>
+                    <form action="/delete-dsa/{{ q.id }}" method="POST" onsubmit="return confirm('Delete this question?')">
+                      <button class="delete-btn" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="empty" id="client-no-matches" style="display: none;">
+            <div class="empty-icon">🔍</div>
+            <strong>No matching questions found</strong>
+            <p>Try adjusting your search terms or filters.</p>
+          </div>
+        {% else %}
+          <div class="empty">
+            <div class="empty-icon">🔍</div>
+            <strong>No matching questions found</strong>
+            <p>No questions matched your search or filter criteria.</p>
+            <a href="/" class="btn btn-secondary" style="margin-top: 10px; display: inline-block;">Clear filters</a>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">HISTORY</p><h2>Aptitude practice</h2></div></div>
+        {% if aptitude_logs %}
+          <div class="record-list">
+          {% for log in aptitude_logs %}
+            <div class="record">
+              <div><strong>{{ log.topic }}</strong><small>{{ log.practice_date }} · {{ log.minutes_spent }} min</small></div>
+              <div class="record-right"><b>{{ log.questions_solved }}</b><small>questions</small>
+                <form action="/delete-aptitude/{{ log.id }}" method="POST" onsubmit="return confirm('Delete this aptitude practice record?')"><button class="delete-btn" type="submit">Remove</button></form>
+              </div>
+            </div>
+          {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty compact"><p>Your aptitude logs will appear here.</p></div>
+        {% endif %}
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">RESULTS</p><h2>Mock-test history</h2></div></div>
+        {% if mock_tests %}
+          <div class="record-list">
+          {% for test in mock_tests %}
+            <div class="record">
+              <div><strong>{{ test.test_name }}</strong><small>{{ test.test_date }} · {{ '%g'|format(test.score) }}/{{ '%g'|format(test.total_marks) }}</small></div>
+              <div class="record-right"><b>{{ ((test.score / test.total_marks) * 100)|round(1) if test.total_marks > 0 else 0 }}%</b>
+                <form action="/delete-mock/{{ test.id }}" method="POST" onsubmit="return confirm('Delete this mock-test record?')"><button class="delete-btn" type="submit">Remove</button></form>
+              </div>
+            </div>
+          {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty compact"><p>Your mock-test scores will appear here.</p></div>
+        {% endif %}
+      </article>
+    </section>
+
+    <!-- Modal Dialog for Editing DSA Question -->
+    <div id="edit-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-heading">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="modal-heading">Edit DSA Question</h3>
+          <button type="button" class="modal-close" onclick="closeEditModal()" aria-label="Close dialog">&times;</button>
+        </div>
+        <form id="edit-modal-form" method="POST" action="">
+          <div class="form-grid">
+            <label class="full">Question title
+              <input id="modal-title-input" name="title" required maxlength="120" placeholder="e.g. Two Sum">
+            </label>
+            <label>Topic
+              <input id="modal-topic-input" name="topic" required maxlength="60" placeholder="e.g. Arrays">
+            </label>
+            <label>Difficulty
+              <select id="modal-difficulty-select" name="difficulty" required>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </label>
+            <div class="modal-actions full">
+              <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+              <button type="submit" class="btn">Save changes</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <footer>PrepTrack · Built with Flask, SQLite, HTML and CSS</footer>
+  </main>
+
+  <script>
+    // Pre-fill date fields with today's local date if empty.
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10);
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+      if (!input.value) {
+        input.value = localDate;
+      }
+    });
+
+    // Edit Modal functionality
+    const editModal = document.getElementById('edit-modal');
+    const editForm = document.getElementById('edit-modal-form');
+    const titleInput = document.getElementById('modal-title-input');
+    const topicInput = document.getElementById('modal-topic-input');
+    const diffSelect = document.getElementById('modal-difficulty-select');
+
+    function openEditModal(button) {
+      const qId = button.getAttribute('data-id');
+      const title = button.getAttribute('data-title');
+      const topic = button.getAttribute('data-topic');
+      const diff = button.getAttribute('data-difficulty');
+
+      editForm.action = '/edit-dsa/' + qId;
+      titleInput.value = title || '';
+      topicInput.value = topic || '';
+      diffSelect.value = diff || 'Easy';
+
+      editModal.style.display = 'flex';
+      titleInput.focus();
+    }
+
+    function closeEditModal() {
+      editModal.style.display = 'none';
+    }
+
+    // Close modal on Escape key or outside backdrop click
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && editModal.style.display === 'flex') {
+        closeEditModal();
+      }
+    });
+
+    editModal.addEventListener('click', (e) => {
+      if (e.target === editModal) {
+        closeEditModal();
+      }
+    });
+
+    // Live Instant Search & Filter (Progressive Enhancement)
+    const searchInput = document.getElementById('dsa-search-input');
+    const topicFilter = document.getElementById('dsa-topic-select');
+    const diffFilter = document.getElementById('dsa-difficulty-select');
+    const statusFilter = document.getElementById('dsa-status-select');
+    const countBadge = document.getElementById('dsa-count-badge');
+    const noMatchesEl = document.getElementById('client-no-matches');
+    const tableEl = document.getElementById('dsa-table');
+
+    function applyLiveFilters() {
+      if (!tableEl) return;
+      const rows = tableEl.querySelectorAll('tbody tr');
+      if (!rows.length) return;
+
+      const qTerm = (searchInput ? searchInput.value : '').trim().toLowerCase();
+      const topicTerm = (topicFilter ? topicFilter.value : '').trim().toLowerCase();
+      const diffTerm = (diffFilter ? diffFilter.value : '').trim();
+      const statusTerm = (statusFilter ? statusFilter.value : '').trim();
+
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const title = row.getAttribute('data-title') || '';
+        const topic = row.getAttribute('data-topic') || '';
+        const diff = row.getAttribute('data-difficulty') || '';
+        const status = row.getAttribute('data-status') || '';
+
+        const matchesSearch = !qTerm || title.includes(qTerm);
+        const matchesTopic = !topicTerm || topic === topicTerm;
+        const matchesDiff = !diffTerm || diff === diffTerm;
+        const matchesStatus = !statusTerm || status === statusTerm;
+
+        if (matchesSearch && matchesTopic && matchesDiff && matchesStatus) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      if (countBadge) {
+        countBadge.textContent = visibleCount + ' showing';
+      }
+
+      if (noMatchesEl) {
+        if (visibleCount === 0 && rows.length > 0) {
+          noMatchesEl.style.display = 'block';
+          tableEl.parentElement.style.display = 'none';
+        } else {
+          noMatchesEl.style.display = 'none';
+          tableEl.parentElement.style.display = 'block';
+        }
+      }
+    }
+
+    if (searchInput) searchInput.addEventListener('input', applyLiveFilters);
+    if (topicFilter) topicFilter.addEventListener('change', applyLiveFilters);
+    if (diffFilter) diffFilter.addEventListener('change', applyLiveFilters);
+    if (statusFilter) statusFilter.addEventListener('change', applyLiveFilters);
+  </script>
+
+  <!-- Day 3: Embedded Analytics JSON Payload -->
+  <script id="analytics-data" type="application/json">{{ analytics|tojson }}</script>
+
+  <script>
+    // Day 3: Initialize Chart.js with Graceful Empty-Dataset Handling
+    (function initCharts() {
+      const analyticsEl = document.getElementById('analytics-data');
+      let analytics = { dsa: { total: 0, completed: 0, pending: 0 }, mock_tests: [], aptitude: [] };
+      if (analyticsEl && analyticsEl.textContent) {
+        try {
+          analytics = JSON.parse(analyticsEl.textContent);
+        } catch (e) {
+          console.error('Error parsing analytics data:', e);
+        }
+      }
+
+      const hasChartJs = typeof Chart !== 'undefined';
+
+      // 1. DSA Completion Donut Chart (Pending vs Completed)
+      const dsaCanvas = document.getElementById('dsaChart');
+      const dsaEmpty = document.getElementById('dsa-empty-overlay');
+      if (!hasChartJs) {
+        if (dsaEmpty) {
+          dsaEmpty.style.display = 'flex';
+          const p = dsaEmpty.querySelector('p');
+          if (p) p.textContent = 'Chart library unavailable. DSA statistics are shown in the metric cards above.';
+        }
+        if (dsaCanvas) dsaCanvas.style.display = 'none';
+      } else if (!analytics.dsa || analytics.dsa.total === 0) {
+        if (dsaEmpty) dsaEmpty.style.display = 'flex';
+        if (dsaCanvas) dsaCanvas.style.display = 'none';
+      } else if (dsaCanvas) {
+        dsaCanvas.style.display = 'block';
+        if (dsaEmpty) dsaEmpty.style.display = 'none';
+        new Chart(dsaCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: ['Completed', 'Pending'],
+            datasets: [{
+              data: [analytics.dsa.completed, analytics.dsa.pending],
+              backgroundColor: ['#10b981', '#f59e0b'],
+              hoverBackgroundColor: ['#059669', '#d97706'],
+              borderWidth: 2,
+              borderColor: '#ffffff',
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#18233b',
+                titleFont: { family: 'DM Sans', size: 12, weight: 'bold' },
+                bodyFont: { family: 'DM Sans', size: 12 },
+                padding: 10,
+                cornerRadius: 8,
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.parsed;
+                    const tot = analytics.dsa.total;
+                    const pct = tot > 0 ? Math.round((val / tot) * 100) : 0;
+                    return ` ${ctx.label}: ${val} (${pct}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Mock-Test Performance Trend Chart
+      const mockCanvas = document.getElementById('mockChart');
+      const mockEmpty = document.getElementById('mock-empty-overlay');
+      if (!hasChartJs) {
+        if (mockEmpty) {
+          mockEmpty.style.display = 'flex';
+          const p = mockEmpty.querySelector('p');
+          if (p) p.textContent = 'Chart library unavailable. Mock-test scores are shown in the results list below.';
+        }
+        if (mockCanvas) mockCanvas.style.display = 'none';
+      } else if (!analytics.mock_tests || analytics.mock_tests.length === 0) {
+        if (mockEmpty) mockEmpty.style.display = 'flex';
+        if (mockCanvas) mockCanvas.style.display = 'none';
+      } else if (mockCanvas) {
+        mockCanvas.style.display = 'block';
+        if (mockEmpty) mockEmpty.style.display = 'none';
+        const mockLabels = analytics.mock_tests.map(t => {
+          const shortName = t.name.length > 15 ? t.name.slice(0, 15) + '…' : t.name;
+          return `${shortName} (${t.date.slice(5)})`;
+        });
+        const mockScores = analytics.mock_tests.map(t => t.percentage);
+
+        new Chart(mockCanvas, {
+          type: 'line',
+          data: {
+            labels: mockLabels,
+            datasets: [{
+              label: 'Score %',
+              data: mockScores,
+              borderColor: '#4f65e9',
+              backgroundColor: 'rgba(79, 101, 233, 0.12)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.35,
+              pointBackgroundColor: '#4f65e9',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4.5,
+              pointHoverRadius: 7,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                min: 0,
+                max: 100,
+                ticks: {
+                  stepSize: 20,
+                  callback: v => v + '%',
+                  font: { family: 'DM Sans', size: 11 },
+                  color: '#75819a',
+                },
+                grid: { color: '#eef2f8' }
+              },
+              x: {
+                ticks: {
+                  font: { family: 'DM Sans', size: 10 },
+                  color: '#75819a',
+                  maxRotation: 35,
+                },
+                grid: { display: false }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#18233b',
+                titleFont: { family: 'DM Sans', size: 12, weight: 'bold' },
+                bodyFont: { family: 'DM Sans', size: 12 },
+                padding: 10,
+                cornerRadius: 8,
+                callbacks: {
+                  title: items => {
+                    const idx = items[0].dataIndex;
+                    return analytics.mock_tests[idx].name;
+                  },
+                  label: ctx => {
+                    const idx = ctx.dataIndex;
+                    const test = analytics.mock_tests[idx];
+                    return ` Score: ${test.percentage}% (${test.score}/${test.total_marks}) on ${test.date}`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // 3. Aptitude Practice Volume Chart
+      const aptCanvas = document.getElementById('aptitudeChart');
+      const aptEmpty = document.getElementById('aptitude-empty-overlay');
+      if (!hasChartJs) {
+        if (aptEmpty) {
+          aptEmpty.style.display = 'flex';
+          const p = aptEmpty.querySelector('p');
+          if (p) p.textContent = 'Chart library unavailable. Aptitude logs are shown in the history list below.';
+        }
+        if (aptCanvas) aptCanvas.style.display = 'none';
+      } else if (!analytics.aptitude || analytics.aptitude.length === 0) {
+        if (aptEmpty) aptEmpty.style.display = 'flex';
+        if (aptCanvas) aptCanvas.style.display = 'none';
+      } else if (aptCanvas) {
+        aptCanvas.style.display = 'block';
+        if (aptEmpty) aptEmpty.style.display = 'none';
+        const aptLabels = analytics.aptitude.map(a => a.date);
+        const aptCounts = analytics.aptitude.map(a => a.questions);
+
+        new Chart(aptCanvas, {
+          type: 'bar',
+          data: {
+            labels: aptLabels,
+            datasets: [{
+              label: 'Questions Solved',
+              data: aptCounts,
+              backgroundColor: '#6366f1',
+              hoverBackgroundColor: '#4f46e5',
+              borderRadius: 6,
+              borderSkipped: false,
+              maxBarThickness: 32,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                  font: { family: 'DM Sans', size: 11 },
+                  color: '#75819a',
+                },
+                grid: { color: '#eef2f8' }
+              },
+              x: {
+                ticks: {
+                  font: { family: 'DM Sans', size: 10 },
+                  color: '#75819a',
+                  maxRotation: 35,
+                },
+                grid: { display: false }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#18233b',
+                titleFont: { family: 'DM Sans', size: 12, weight: 'bold' },
+                bodyFont: { family: 'DM Sans', size: 12 },
+                padding: 10,
+                cornerRadius: 8,
+                callbacks: {
+                  title: items => `Date: ${items[0].label}`,
+                  label: ctx => {
+                    const idx = ctx.dataIndex;
+                    const item = analytics.aptitude[idx];
+                    return ` Solved: ${item.questions} questions (${item.minutes} mins, ${item.sessions} log${item.sessions > 1 ? 's' : ''})`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

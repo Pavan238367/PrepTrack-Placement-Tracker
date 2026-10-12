@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Edit DSA question in PrepTrack placement preparation tracker.">
+  <title>Edit DSA Question | PrepTrack</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Prep<span>Track</span></a>
+    <span class="top-note">Your placement journey, organized.</span>
+  </header>
+
+  <main class="container">
+    <section class="welcome">
+      <div>
+        <p class="eyebrow">UPDATE QUESTION</p>
+        <h1>Edit <span>DSA Question</span></h1>
+        <p class="muted">Modify question title, topic, or difficulty rating.</p>
+      </div>
+      <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+    </section>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-area">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="edit-container">
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">QUESTION #{{ question.id }}</p>
+            <h2>Update details</h2>
+          </div>
+          <span class="status {{ 'done' if question.status == 'Completed' else 'pending' }}">
+            {{ question.status }}
+          </span>
+        </div>
+
+        <form action="/edit-dsa/{{ question.id }}" method="POST" class="form-grid">
+          <label class="full">Question title
+            <input name="title" value="{{ question.title }}" required maxlength="120" placeholder="e.g. Two Sum">
+          </label>
+          <label>Topic
+            <input name="topic" value="{{ question.topic }}" required maxlength="60" placeholder="e.g. Arrays">
+          </label>
+          <label>Difficulty
+            <select name="difficulty" required>
+              <option value="Easy" {% if question.difficulty == 'Easy' %}selected{% endif %}>Easy</option>
+              <option value="Medium" {% if question.difficulty == 'Medium' %}selected{% endif %}>Medium</option>
+              <option value="Hard" {% if question.difficulty == 'Hard' %}selected{% endif %}>Hard</option>
+            </select>
+          </label>
+          <div class="form-actions full">
+            <a href="/" class="btn btn-secondary">Cancel</a>
+            <button class="btn" type="submit">Save changes</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <footer>PrepTrack · Built with Flask, SQLite, HTML and CSS</footer>
+  </main>
+</body>
+</html>
